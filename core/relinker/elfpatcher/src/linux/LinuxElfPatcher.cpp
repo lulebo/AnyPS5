@@ -97,6 +97,11 @@ std::vector<std::uint8_t> RebasedRelocations(const std::vector<std::uint8_t>& ta
     return rebased;
 }
 
+void RequireCongruentOffset(const Domain::ProgramHeader& load) {
+    if (load.FileSize != 0 && load.Offset % kDefaultLoadAlignment != load.MappedAddress % kDefaultLoadAlignment)
+        throw Domain::RelinkerException("PT_LOAD at " + Hex(load.MappedAddress) + " has file offset " + Hex(load.Offset) + ", which is not congruent to its address modulo " + Hex(kDefaultLoadAlignment));
+}
+
 void RequireFileRange(const std::vector<std::uint8_t>& buf, const Domain::ProgramHeader& load) {
     if (load.Offset > buf.size() || load.FileSize > buf.size() - load.Offset)
         throw Domain::RelinkerException("PT_LOAD at " + Hex(load.MappedAddress) + " has file bytes outside the input");
@@ -107,6 +112,7 @@ void SeparateSharedLoadPages(std::vector<std::uint8_t>& buf, std::vector<Domain:
     for (std::size_t index = 0; index < headers.size(); ++index) {
         if (headers[index].Type == PT_LOAD && headers[index].MemorySize != 0) {
             RequireFileRange(buf, headers[index]);
+            RequireCongruentOffset(headers[index]);
             loads.push_back(index);
         }
     }
@@ -116,7 +122,7 @@ void SeparateSharedLoadPages(std::vector<std::uint8_t>& buf, std::vector<Domain:
     for (std::size_t position = 0; position < loads.size(); ++position) {
         auto& load = headers[loads[position]];
         const auto prefix = load.MappedAddress % kDefaultLoadAlignment;
-        if (prefix == 0 || load.FileSize == 0 || load.Offset % kDefaultLoadAlignment != prefix)
+        if (prefix == 0 || load.FileSize == 0)
             continue;
         const auto pageStart = load.MappedAddress - prefix;
         std::vector<std::uint8_t> image(static_cast<std::size_t>(prefix), 0);

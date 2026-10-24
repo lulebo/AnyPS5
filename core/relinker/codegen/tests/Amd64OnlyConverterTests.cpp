@@ -1319,21 +1319,21 @@ Bytes elfFixture(const Bytes& text) {
     bytes[6] = 1;
     write<std::uint16_t>(bytes, 16, 3);
     write<std::uint16_t>(bytes, 18, 62);
-    write<std::uint64_t>(bytes, 24, 0x1000);
+    write<std::uint64_t>(bytes, 24, 0x1200);
     write<std::uint64_t>(bytes, 32, 64);
     write<std::uint16_t>(bytes, 54, 56);
     write<std::uint16_t>(bytes, 56, 7);
     write<std::uint32_t>(bytes, 64, 1);
     write<std::uint32_t>(bytes, 68, 5);
     write<std::uint64_t>(bytes, 72, 0x200);
-    write<std::uint64_t>(bytes, 80, 0x1000);
+    write<std::uint64_t>(bytes, 80, 0x1200);
     write<std::uint64_t>(bytes, 96, 0x100);
     write<std::uint64_t>(bytes, 104, 0x100);
     write<std::uint64_t>(bytes, 112, 0x1000);
     write<std::uint32_t>(bytes, 120, 1);
     write<std::uint32_t>(bytes, 124, 6);
     write<std::uint64_t>(bytes, 128, 0x300);
-    write<std::uint64_t>(bytes, 136, 0x2000);
+    write<std::uint64_t>(bytes, 136, 0x2300);
     write<std::uint64_t>(bytes, 152, 0x100);
     write<std::uint64_t>(bytes, 160, 0x100);
     write<std::uint64_t>(bytes, 168, 0x1000);
@@ -1343,7 +1343,7 @@ Bytes elfFixture(const Bytes& text) {
 }
 
 std::vector<Domain::ProgramHeader> elfHeaders() {
-    return {{1, 5, 0x200, 0x1000, 0, 0x100, 0x100, 0x1000}, {1, 6, 0x300, 0x2000, 0, 0x100, 0x100, 0x1000}};
+    return {{1, 5, 0x200, 0x1200, 0, 0x100, 0x100, 0x1000}, {1, 6, 0x300, 0x2300, 0, 0x100, 0x100, 0x1000}};
 }
 
 Elfpatcher::Linux::LinuxElfPatcher linuxPatcher() {
@@ -1378,11 +1378,11 @@ void linuxPlacement() {
     auto patcher = linuxPatcher();
     const auto output = patcher.Patch(converted.Bytes, headers, {}, 0, "$ORIGIN/libs", true, false, converted.Trampolines);
     require(output[0x202] == 0xE9 && output[0x207] == 0x90, "Linux site was not replaced by a jump");
-    const auto target = 0x1002 + 5 + static_cast<std::int64_t>(read<std::int32_t>(output, 0x203));
-    require(target % 16 == 0 && target > 0x2100, "Linux stub is misaligned or inside the original image");
+    const auto target = 0x1202 + 5 + static_cast<std::int64_t>(read<std::int32_t>(output, 0x203));
+    require(target % 16 == 0 && target > 0x2400, "Linux stub is misaligned or inside the original image");
     const auto bodyOffset = executableFileOffset(output, static_cast<std::uint64_t>(target));
     auto expectedBody = kInsertqSelfBody;
-    write<std::int32_t>(expectedBody, 10, static_cast<std::int32_t>(0x1008 - (target + 9 + 5)));
+    write<std::int32_t>(expectedBody, 10, static_cast<std::int32_t>(0x1208 - (target + 9 + 5)));
     const Bytes actualBody(output.begin() + static_cast<std::ptrdiff_t>(bodyOffset), output.begin() + static_cast<std::ptrdiff_t>(bodyOffset + expectedBody.size()));
     require(actualBody == expectedBody, "Linux stub body or return branch is wrong");
     auto altered = converted.Bytes;
@@ -1392,7 +1392,7 @@ void linuxPlacement() {
 
 void linuxRipRelativePlacement() {
     Bytes text = {0x0F, 0x38, 0xCC, 0x15, 0x00, 0x00, 0x00, 0x00, 0xC3};
-    write<std::int32_t>(text, 4, 0x2040 - 0x1008);
+    write<std::int32_t>(text, 4, 0x2340 - 0x1208);
     const auto source = elfFixture(text);
     const auto headers = elfHeaders();
     const auto converted = Codegen::MakeAmd64OnlyConverter()->Convert(source, {headers[0]});
@@ -1400,11 +1400,11 @@ void linuxRipRelativePlacement() {
     auto patcher = linuxPatcher();
     const auto output = patcher.Patch(converted.Bytes, headers, {}, 0, "$ORIGIN/libs", true, false, converted.Trampolines);
     require(output[0x200] == 0xE9, "RIP-relative Linux site was not replaced by a jump");
-    const auto stub = 0x1000 + 5 + static_cast<std::int64_t>(read<std::int32_t>(output, 0x201));
+    const auto stub = 0x1200 + 5 + static_cast<std::int64_t>(read<std::int32_t>(output, 0x201));
     const auto& relocation = converted.Trampolines[0].Relocations[0];
     const auto bodyOffset = executableFileOffset(output, static_cast<std::uint64_t>(stub));
     const auto operand = stub + static_cast<std::int64_t>(relocation.InstructionEnd) + read<std::int32_t>(output, bodyOffset + relocation.DisplacementOffset);
-    require(operand == 0x2040, "Relocated RIP-relative operand does not reach the original address");
+    require(operand == 0x2340, "Relocated RIP-relative operand does not reach the original address");
 }
 
 std::vector<std::array<std::uint64_t, 8>> stackHeaders(const Bytes& output) {
